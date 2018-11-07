@@ -1,4 +1,6 @@
 import com.mongodb.client.*;
+import com.mongodb.client.model.FindOneAndUpdateOptions;
+import com.mongodb.client.model.ReturnDocument;
 import org.bson.Document;
 
 public class MongoDbRepository implements Repository {
@@ -30,12 +32,16 @@ public class MongoDbRepository implements Repository {
     }
 
     public Job getNextJob() {
-        MongoCollection<Document> jobs = db.getCollection("jobs");
-        MongoCursor<Document> cursor = jobs.find().iterator();
-        if (cursor.hasNext()) {
-            cursor.close();
-            return new Job();
-        }
-        return null;
+//        MongoCollection<Document> jobs = db.getCollection("jobs");
+//        Document query = new Document("status", "Created");
+//        Document update = new Document("$set", new Document("status", "Running"));
+//        FindOneAndUpdateOptions opt = new FindOneAndUpdateOptions().returnDocument(ReturnDocument.AFTER);
+//        Document newJob = jobs.findOneAndUpdate(query, update, opt);
+//        if (newJob != null) {
+//            return new Job("1", "Running", "s3://s3.amazonaws.com/vps-video/maven.tar.gz", "s3://s3.amazonaws.com/vps-video-test/test/maven.tar.gz", "maven");
+//        }
+//        return null;
+
+        return new Job("1", "Running", "s3://s3.amazonaws.com/vps-video/maven.tar.gz", "s3://s3.amazonaws.com/vps-video-test/test/maven.tar.gz", "maven");
     }
 }
