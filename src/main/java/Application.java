@@ -19,9 +19,8 @@ class Application {
                 if (job != null) {
                     Job copy = new Job(job); // pass copy to avoid concurrent access
                     JobRunner jobRunner = new JobRunner(copy);
-                    Thread runnerThread = new Thread(jobRunner);
-                    runningJobs.add(runnerThread);
-                    runnerThread.start();
+                    runningJobs.add(jobRunner);
+                    jobRunner.start();
                 }
             }
             // pause

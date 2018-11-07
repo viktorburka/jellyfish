@@ -1,7 +1,7 @@
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.io.*;
+import java.util.HashMap;
 
-public class JobRunner implements Runnable {
+public class JobRunner extends Thread {
 
     private Job job;
     private String error = "";
@@ -17,26 +17,65 @@ public class JobRunner implements Runnable {
     public void run() {
         System.out.println("transferring from " + job.srcUrl + " to " + job.dstUrl);
 
-        URL srcUrl;
-        URL dstUrl;
+        String srcScheme;
+        String dstScheme;
 
         try {
-            srcUrl = new URL(job.srcUrl);
-        } catch (MalformedURLException e) {
-            String error = String.format("invalid src url: %s", e.getMessage());
-            setError(error);
+            srcScheme = SchemeParser.getScheme(job.srcUrl);
+            dstScheme = SchemeParser.getScheme(job.dstUrl);
+        } catch (Exception e) {
+            setError(e.getMessage());
             return;
         }
 
-        try {
-            dstUrl = new URL(job.dstUrl);
-        } catch (MalformedURLException e) {
-            String error = String.format("invalid dst url: %s", e.getMessage());
-            setError(error);
+        Receiver probe = Receiver.getProbeForScheme(srcScheme);
+        if (probe == null) {
+            setError(String.format("unsupported scheme: %s", srcScheme));
             return;
         }
 
-        Downloader probe = Downloader.getProbeForScheme(srcUrl.getProtocol());
+        FileInfo info;
+        try {
+            info = probe.getFileInfo(job.srcUrl, new HashMap<>());
+        } catch (Receiver.ReceiverOperationError e) {
+            setError(e.getMessage());
+            return;
+        }
+
+        Receiver receiver = Receiver.getReceiverForScheme(srcScheme, info.size);
+        if (receiver == null) {
+            setError(String.format("unsupported scheme: %s", srcScheme));
+            return;
+        }
+
+        Sender sender = Sender.getSenderForScheme(dstScheme, info.size);
+        if (sender == null) {
+            setError(String.format("unsupported scheme: %s", dstScheme));
+            return;
+        }
+
+        Downloader downloader = Downloader.getDownloader();
+        Uploader uploader = Uploader.getUploader();
+
+        try {
+            File buffer = new File("key_name");
+            FileOutputStream writer = new FileOutputStream(buffer);
+            FileInputStream reader = new FileInputStream(buffer);
+
+            downloader.download(job.srcUrl, new HashMap<>(), receiver, writer);
+            uploader.upload(job.dstUrl, new HashMap<>(), sender, reader);
+
+        } catch (FileNotFoundException e) {
+            setError("can't crate buffer file for download");
+            return;
+        } catch (Exception e) {
+            setError(String.format("download error: %s", e.getMessage()));
+            return;
+        }
+    }
+
+    private synchronized String getError() {
+        return this.error;
     }
 
     private synchronized void setError(String error) {

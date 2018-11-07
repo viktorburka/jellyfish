@@ -1,19 +1,11 @@
+import java.io.OutputStream;
+import java.util.Map;
+
 public interface Downloader {
 
-    public FileInfo getFileInfo(String src, DownloadOptions options);
+    void download(String url, Map<String,String> options, Receiver rc, OutputStream writer) throws Exception;
 
-    public boolean download(String url, DownloadOptions options, Receiver rc);
-
-    public static Downloader getProbeForScheme(String scheme) {
-        return getDownloaderForScheme(scheme);
-    }
-
-    public static Downloader getDownloaderForScheme(String scheme) {
-        switch (scheme) {
-            case "s3":
-                return new DownloaderS3();
-            default:
-                return null;
-        }
+    static Downloader getDownloader() {
+        return new DownloaderSimple();
     }
 }

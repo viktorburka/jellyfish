@@ -1,86 +1,85 @@
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.AmazonS3URI;
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
 
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Map;
 
 public class ReceiverS3Simple implements Receiver {
 
-    private String error = "";
     private String bucketName;
     private String keyName;
     private AmazonS3 s3;
 
     @Override
-    public FileInfo getFileInfo(String url, DownloadOptions options) {
+    public FileInfo getFileInfo(String url, Map<String,String> options) throws ReceiverOperationError {
         FileInfo fileInfo;
-        if (!openConnection(url, options))
-            return null;
-        fileInfo = fetchFileInfo(url, options); // can be null but need to call closeConnection()
-        if (!closeConnection())
-            return null;
+        openConnection(url, options);
+        fileInfo = fetchFileInfo(); // can be null but need to call closeConnection()
+        closeConnection();
         return fileInfo;
     }
 
     @Override
-    public boolean openConnection(String url, DownloadOptions options) {
+    public void openConnection(String url, Map<String,String> options) {
+        AmazonS3URI s3uri = new AmazonS3URI(url);
+        this.bucketName = s3uri.getBucket();
+        this.keyName = s3uri.getKey();
         this.s3 = AmazonS3ClientBuilder.defaultClient();
-        return true;
     }
 
     @Override
-    public boolean isConnectionOpen() {
-        return this.s3 != null;
-    }
+    public long readPart(OutputStream writer, Map<String,String> options) throws ReceiverOperationError {
 
-    @Override
-    public long readPart(FileOutputStream writer, Map<String,String> options) {
-
-        String bucketName = options.get("bucket");
+        long totalRead = 0;
 
         try {
             S3Object o = s3.getObject(bucketName, keyName);
             S3ObjectInputStream s3is = o.getObjectContent();
-            byte[] read_buf = new byte[1024];
-            int read_len = 0;
-            while ((read_len = s3is.read(read_buf)) > 0) {
-                writer.write(read_buf, 0, read_len);
+            byte[] buf = new byte[1024];
+            int bytesRead = 0;
+            while ((bytesRead = s3is.read(buf)) > 0) {
+                writer.write(buf, 0, bytesRead);
+                totalRead += bytesRead;
             }
             s3is.close();
             writer.close();
         } catch (AmazonServiceException e) {
-            setError(e.getErrorMessage());
-            return -1;
-        } catch (FileNotFoundException e) {
-            setError(e.getMessage());
-            return -1;
+            String err = String.format("error downloading s3 object: %s", e.getErrorMessage());
+            throw new ReceiverOperationError(err);
         } catch (IOException e) {
-            setError(e.getMessage());
-            return -1;
+            String err = String.format("error downloading s3 object: %s", e.getMessage());
+            throw new ReceiverOperationError(err);
         }
-        return 0;
+
+        return totalRead;
     }
 
     @Override
-    public boolean cancel() {
-        return false;
+    public void cancel() {
+        closeConnection();
     }
 
     @Override
-    public boolean closeConnection() {
-        return false;
+    public void closeConnection() {
+        this.s3 = null;
     }
 
-    private FileInfo fetchFileInfo(String url, DownloadOptions options) {
-        return new FileInfo();
-    }
-
-    private synchronized void setError(String error) {
-        this.error = error;
+    private FileInfo fetchFileInfo() throws ReceiverOperationError {
+        ObjectMetadata md;
+        try {
+            md = s3.getObjectMetadata(bucketName, keyName);
+        } catch (AmazonServiceException e) {
+            String error = String.format("can't retrieve source file information: %s", e.getErrorMessage());
+            throw new ReceiverOperationError(error);
+        }
+        FileInfo fileInfo = new FileInfo();
+        fileInfo.size = md.getContentLength();
+        return fileInfo;
     }
 }
