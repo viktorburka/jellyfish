@@ -32,16 +32,16 @@ public class MongoDbRepository implements Repository {
     }
 
     public Job getNextJob() {
-//        MongoCollection<Document> jobs = db.getCollection("jobs");
-//        Document query = new Document("status", "Created");
-//        Document update = new Document("$set", new Document("status", "Running"));
-//        FindOneAndUpdateOptions opt = new FindOneAndUpdateOptions().returnDocument(ReturnDocument.AFTER);
-//        Document newJob = jobs.findOneAndUpdate(query, update, opt);
-//        if (newJob != null) {
-//            return new Job("1", "Running", "s3://s3.amazonaws.com/vps-video/maven.tar.gz", "s3://s3.amazonaws.com/vps-video-test/test/maven.tar.gz", "maven");
-//        }
-//        return null;
+        MongoCollection<Document> jobs = db.getCollection("jobs");
+        Document query = new Document("status", "Created");
+        Document update = new Document("$set", new Document("status", "Running"));
+        FindOneAndUpdateOptions opt = new FindOneAndUpdateOptions().returnDocument(ReturnDocument.AFTER);
+        Document newJobDocument = jobs.findOneAndUpdate(query, update, opt);
+        if (newJobDocument != null) {
+            return new Job(newJobDocument);
+        }
+        return null;
 
-        return new Job("1", "Running", "s3://s3.amazonaws.com/vps-video/maven.tar.gz", "s3://s3.amazonaws.com/vps-video-test/test/maven.tar.gz", "maven");
+//        return new Job("1", "Running", "s3://s3.amazonaws.com/vps-video/maven.tar.gz", "s3://s3.amazonaws.com/vps-video-test/test/maven.tar.gz", "maven");
     }
 }

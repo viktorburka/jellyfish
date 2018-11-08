@@ -5,10 +5,10 @@ import java.util.Map;
 public class DownloaderSimple implements Downloader {
 
     @Override
-    public void download(String url, Map<String,String> options, Receiver rc, OutputStream writer) throws Exception {
+    public void download(String url, Map<String,String> options, Receiver rc, OutputStream output) throws Exception {
         try {
             rc.openConnection(url, options);
-            rc.readPart(writer, new HashMap<>());
+            rc.readPart(output, new HashMap<>());
             rc.closeConnection();
         } catch (Receiver.ReceiverOperationError e) {
             throw new Exception(e);
