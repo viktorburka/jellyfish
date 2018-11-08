@@ -1,4 +1,6 @@
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.AmazonS3URI;
@@ -26,10 +28,17 @@ public class ReceiverS3Simple implements Receiver {
     }
 
     @Override
-    public void openConnection(String url, Map<String,String> options) {
+    public void openConnection(String url, Map<String,String> options) throws ReceiverOperationError {
+
         AmazonS3URI s3uri = new AmazonS3URI(url);
-        this.bucketName = s3uri.getBucket();
-        this.keyName = s3uri.getKey();
+        String bucketAndKey = s3uri.getKey(); // for some reason AWS returns the path
+
+        int dividerIdx = bucketAndKey.indexOf('/');
+        if (dividerIdx == -1)
+            throw new ReceiverOperationError(String.format("can't parse path [%s]", bucketAndKey));
+
+        this.bucketName = bucketAndKey.substring(0, dividerIdx);
+        this.keyName = bucketAndKey.substring(dividerIdx+1);
         this.s3 = AmazonS3ClientBuilder.defaultClient();
     }
 
@@ -43,10 +52,11 @@ public class ReceiverS3Simple implements Receiver {
             S3ObjectInputStream s3is = o.getObjectContent();
             byte[] buf = new byte[1024];
             int bytesRead = 0;
-            while ((bytesRead = s3is.read(buf)) > 0) {
+            while ((bytesRead = s3is.read(buf)) != -1) {
                 writer.write(buf, 0, bytesRead);
                 totalRead += bytesRead;
             }
+            System.out.println(String.format("received total of %d bytes", totalRead));
             s3is.close();
             writer.close();
         } catch (AmazonServiceException e) {
@@ -75,7 +85,8 @@ public class ReceiverS3Simple implements Receiver {
         try {
             md = s3.getObjectMetadata(bucketName, keyName);
         } catch (AmazonServiceException e) {
-            String error = String.format("can't retrieve source file information: %s", e.getErrorMessage());
+            System.out.println(e);
+            String error = String.format("can't retrieve source file header information: %s", e.getErrorMessage());
             throw new ReceiverOperationError(error);
         }
         FileInfo fileInfo = new FileInfo();

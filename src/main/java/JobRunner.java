@@ -1,20 +1,34 @@
 import java.io.*;
 import java.util.HashMap;
+import java.util.concurrent.CountDownLatch;
 
 public class JobRunner extends Thread {
 
     private Job job;
     private String error = "";
+    private CountDownLatch latch;
 
     JobRunner(Job job) {
         this.job = job;
     }
 
-    public synchronized boolean isError() {
-        return error.isEmpty();
+    synchronized boolean isError() {
+        return !error.isEmpty();
+    }
+
+    synchronized String getError() {
+        return this.error;
+    }
+
+    void setSignalOnStart(CountDownLatch latch) {
+        this.latch = latch;
     }
 
     public void run() {
+        // signal that the thread has started
+        if (latch != null)
+            latch.countDown();
+
         System.out.println("transferring from " + job.srcUrl + " to " + job.dstUrl);
 
         String srcScheme;
@@ -36,7 +50,9 @@ public class JobRunner extends Thread {
 
         FileInfo info;
         try {
+            System.out.println("query src file header information...");
             info = probe.getFileInfo(job.srcUrl, new HashMap<>());
+            System.out.println("file size: " + info.size);
         } catch (Receiver.ReceiverOperationError e) {
             setError(e.getMessage());
             return;
@@ -57,13 +73,20 @@ public class JobRunner extends Thread {
         Downloader downloader = Downloader.getDownloader();
         Uploader uploader = Uploader.getUploader();
 
-        try {
-            File buffer = new File("key_name");
-            FileOutputStream writer = new FileOutputStream(buffer);
-            FileInputStream reader = new FileInputStream(buffer);
+        File buffer = new File("buffer.file");
 
+        try {
+            System.out.println("start downloading...");
+            FileOutputStream writer = new FileOutputStream(buffer);
             downloader.download(job.srcUrl, new HashMap<>(), receiver, writer);
+            writer.close();
+            System.out.println("download finished");
+
+            System.out.println("start uploading...");
+            FileInputStream reader = new FileInputStream(buffer);
             uploader.upload(job.dstUrl, new HashMap<>(), sender, reader);
+            reader.close();
+            System.out.println("upload finished");
 
         } catch (FileNotFoundException e) {
             setError("can't crate buffer file for download");
@@ -72,10 +95,6 @@ public class JobRunner extends Thread {
             setError(String.format("download error: %s", e.getMessage()));
             return;
         }
-    }
-
-    private synchronized String getError() {
-        return this.error;
     }
 
     private synchronized void setError(String error) {
